@@ -1,0 +1,61 @@
+ame: "Create deb package from ROS package."
+description: "Create a deb package from the current ROS package. Assumes ROS is setup."
+inputs:
+   context:
+     required: false
+     description: "The path to the ROS package."
+     default: '.'
+   custom_rosdep:
+     required: false
+     description: "Provide a path to a custom rosdep file."
+     default: ''
+   packages_path: 
+     required: false
+     description: "The location where to move the resulting deb package."
+     default: '_packages'
+    
+runs:
+  using: "composite"
+  steps:      
+    - name: Move into package directory
+      run: | 
+           echo "Moving into ${{ inputs.context }}."
+           cd ${{ inputs.context }}
+      shell: bash
+    
+    - name: Add custom rosdep list
+      run: echo ${{ inputs.custom_rosdep }} > /etc/ros/rosdep/sources.list.d/99-custom.list
+      shell: bash
+    
+    - name: Update rosdep
+      run: rosdep update
+      shell: bash
+      
+    - name: Install packaging dependencies
+      run: apt-get update && apt-get install -y --no-install-recommends python3-bloom fakeroot dpkg-dev debhelper
+      shell: bash
+      
+    - name: Install ROS minimum ROS package dependencies
+      run: |
+        echo "#!/bin/bash" > install_dependencies.sh 
+        rosdep install --from-paths . --ignore-src -y -s >> install_dependencies.sh
+        sed -i 's/-y/& --no-install-recommends/' install_dependencies.sh
+        apt-get update 
+        chmod +x ./install_dependencies.sh
+        ./install_dependencies.sh
+        rm ./install_dependencies.sh
+      shell: bash
+    
+    - name: Generate configuration files
+      run: bloom-generate rosdebian --ros-distro $(rosversion -d) 
+      shell: bash
+    
+    - name: Generate deb file
+      run: fakeroot debian/rules binary
+      shell: bash
+    
+    - name: Move package to current dir
+      run: |
+           mkdir -p ${{ inputs.packages_path }}
+           mv ../*.deb ${{ inputs.packages_path }}
+      shell: bash
