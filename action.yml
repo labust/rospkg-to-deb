@@ -51,7 +51,7 @@ runs:
       shell: bash
     
     - name: Generate deb file
-      run: fakeroot debian/rules binary
+      run: DEB_BUILD_OPTIONS="parallel=`nproc`" fakeroot debian/rules "binary --parallel"
       shell: bash
     
     - name: Move package to current dir
